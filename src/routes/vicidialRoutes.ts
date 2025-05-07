@@ -4,7 +4,7 @@ import { addLead, updateLead, handleCallStatus } from '../controllers/vicidialCo
 const router = Router();
 
 router.post('/vici/add-lead', addLead);
-router.put('/vici/update-lead', updateLead);
+router.post('/vici/update-lead', updateLead);
 router.post('/vicidial-call-status', handleCallStatus);
 
 export default router;

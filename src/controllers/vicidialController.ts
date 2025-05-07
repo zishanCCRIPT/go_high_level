@@ -59,7 +59,7 @@ export const addLead = async (req: Request, res: Response): Promise<any> => {
     return res.status(400).json({ error: "Email is required" });
   }
 
-  if(!allowedDispositions.includes(disposition)){
+  if(disposition && !allowedDispositions.includes(disposition)){
     return res.status(400).json({ error: "Invalid disposition value" });
 
   }
@@ -140,7 +140,7 @@ function formatDateOfBirth(dob: string): string | null {
     // Example: Convert "Sep 2nd 1995" to "1995-09-02"
     return new Date(dob).toISOString().split("T")[0];
   } catch (e) {
-    console.warn("Invalid date format:", dob);
+
     return null;
   }
 }

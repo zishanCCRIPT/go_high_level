@@ -115,7 +115,7 @@ export const addLead = async (req: Request, res: Response): Promise<any> => {
     console.log("✅ Vicidial API Response:", data);
 
     if (typeof data === "string" && data.includes("ERROR")) {
-      throw new Error(data);
+      throw new Error(data);  
     }
 
     res.status(200).json({
@@ -160,7 +160,7 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
     disposition,
     date_of_birth,
     source = "GoHighLevel",
-  } = req.body;
+  } = req.body?.customData;
 
   if (!validateEnvVars(res)) return;
 
@@ -189,6 +189,11 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
       params.append("phone_number", sanitizedPhone);
       params.append("search_method", "PHONE_NUMBER");
       params.append("search_location", "SYSTEM");
+    }
+
+    if(!allowedDispositions.includes(disposition)){
+      return res.status(400).json({ error: "Invalid disposition value" });
+  
     }
 
     // Documented optional fields
@@ -232,7 +237,7 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
 
       // Success response parsing
       const match = data.match(/SUCCESS.*\|(\d+)\|/);
-      return res.status(200).json({
+      return res.status(200).json({ 
         success: true,
         message: "Lead updated successfully",
         lead_id: match ? match[1] : null,

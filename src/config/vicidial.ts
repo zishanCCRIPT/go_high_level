@@ -2,7 +2,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-export const CONFIG = {
+export const CONFIG = { 
   API_USERNAME: process.env.VICIDIAL_API_USERNAME,
   API_PASSWORD: process.env.VICIDIAL_API_PASSWORD,
   BASE_URL: process.env.VICIDIAL_BASE_URL,

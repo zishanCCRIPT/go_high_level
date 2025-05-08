@@ -315,7 +315,7 @@ export const handleCallStatus = async (req: Request, res: Response): Promise<any
     let nextPageToken: string | null = null;
 
     do {
-      const url : any = nextPageToken
+      const url: any = nextPageToken
         ? `${baseUrl}?limit=100&nextPageToken=${nextPageToken}`
         : `${baseUrl}?limit=100`;
 
@@ -336,9 +336,16 @@ export const handleCallStatus = async (req: Request, res: Response): Promise<any
 
     // Step 3: Update contact with new "state"
     const updateUrl = `${process.env.GHL_BASE_URL}/contacts/${contact.id}`;
+
     const updatePayload = {
-      state: disposition,
+      customField: [
+        {
+          id: contact?.customField[0]?.id || 'I8LvfhNDaFTojQz7YJPA', // Replace with your actual custom field ID
+          value: disposition,
+        },
+      ],
     };
+
 
     try {
       const updateResponse = await axios.put(updateUrl, updatePayload, { headers });
@@ -394,7 +401,7 @@ export const getGHLContactByPhone = async (req: Request, res: Response): Promise
   const rawPhone = phone.replace(/[^\d]/g, '');
   const formattedPhone = `+1${rawPhone}`; // Adjust country code if needed
 
-  console.log("formattedPhone" ,  formattedPhone)
+  console.log("formattedPhone", formattedPhone)
 
   const searchUrl = `${process.env.GHL_BASE_URL}/contacts/search?phone=${encodeURIComponent(formattedPhone)}`;
   const headers = {

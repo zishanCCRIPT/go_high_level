@@ -59,7 +59,7 @@ export const addLead = async (req: Request, res: Response): Promise<any> => {
     return res.status(400).json({ error: "Email is required" });
   }
 
-  if(disposition && !allowedDispositions.includes(disposition)){
+  if (disposition && !allowedDispositions.includes(disposition)) {
     return res.status(400).json({ error: "Invalid disposition value" });
 
   }
@@ -115,7 +115,7 @@ export const addLead = async (req: Request, res: Response): Promise<any> => {
     console.log("✅ Vicidial API Response:", data);
 
     if (typeof data === "string" && data.includes("ERROR")) {
-      throw new Error(data);  
+      throw new Error(data);
     }
 
     res.status(200).json({
@@ -191,9 +191,9 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
       params.append("search_location", "SYSTEM");
     }
 
-    if(!allowedDispositions.includes(disposition)){
+    if (!allowedDispositions.includes(disposition)) {
       return res.status(400).json({ error: "Invalid disposition value" });
-  
+
     }
 
     // Documented optional fields
@@ -237,7 +237,7 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
 
       // Success response parsing
       const match = data.match(/SUCCESS.*\|(\d+)\|/);
-      return res.status(200).json({ 
+      return res.status(200).json({
         success: true,
         message: "Lead updated successfully",
         lead_id: match ? match[1] : null,
@@ -269,7 +269,11 @@ function formatDateToYYYYMMDD(dateString: string): string | null {
   }
 }
 
-export const handleCallStatus = (req: Request, res: Response): void => {
+
+
+
+
+export const handleCallStatus = async (req: Request, res: Response): Promise<any> => {
   const {
     lead_id,
     phone_number,
@@ -280,19 +284,141 @@ export const handleCallStatus = (req: Request, res: Response): void => {
     list_id,
     user_group,
     comments,
-  } = req.body;
+    disposition,
+  } = req.body || {};
 
-  console.log("📞 Received call status from Vicidial:", {
-    lead_id,
-    phone_number,
-    status,
-    call_date,
-    agent,
-    campaign_id,
-    list_id,
-    user_group,
-    comments,
-  });
+  if (!lead_id || !phone_number) {
+    console.error('❌ Missing required fields: lead_id or phone');
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
 
-  res.status(200).json({ message: "Call status received successfully" });
+  if (disposition && !allowedDispositions.includes(disposition)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid disposition. Lead not processed.',
+      disposition,
+    });
+  }
+
+  const headers = {
+    Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  const rawPhone = phone_number.replace(/[^\d]/g, '');
+  const formattedPhone = `+1${rawPhone}`;
+
+  try {
+    // Step 1: Fetch all contacts
+    const baseUrl = `${process.env.GHL_BASE_URL}/contacts`;
+    let allContacts: any[] = [];
+    let nextPageToken: string | null = null;
+
+    do {
+      const url : any = nextPageToken
+        ? `${baseUrl}?limit=100&nextPageToken=${nextPageToken}`
+        : `${baseUrl}?limit=100`;
+
+      const response = await axios.get(url, { headers });
+      const { contacts = [], meta = {} } = response.data;
+
+      allContacts = [...allContacts, ...contacts];
+      nextPageToken = meta.nextPageToken || null;
+    } while (nextPageToken);
+
+    // Step 2: Filter contact by phone number
+    const contact = allContacts.find(c => c.phone === formattedPhone);
+
+    if (!contact?.id) {
+      console.warn(`❌ Contact with phone ${formattedPhone} not found`);
+      return res.status(404).json({ error: 'Contact not found in GoHighLevel' });
+    }
+
+    // Step 3: Update contact with new "state"
+    const updateUrl = `${process.env.GHL_BASE_URL}/contacts/${contact.id}`;
+    const updatePayload = {
+      state: disposition,
+    };
+
+    try {
+      const updateResponse = await axios.put(updateUrl, updatePayload, { headers });
+      console.log('✅ Disposition (state) updated in GoHighLevel:', updateResponse.data);
+    } catch (updateError: any) {
+      console.error('❌ Error during contact update:', updateError.response?.data || updateError.message);
+      return res.status(500).json({ error: 'Failed to update disposition in GoHighLevel' });
+    }
+
+    return res.status(200).json({ message: 'Call status and disposition updated successfully' });
+
+  } catch (error: any) {
+    console.error('❌ Unexpected server error:', error.message);
+    return res.status(500).json({ error: 'Unexpected server error' });
+  }
 };
+
+
+
+
+
+export const getAllGHLContacts = async (req: Request, res: Response): Promise<any> => {
+  const url = `${process.env.GHL_BASE_URL}/contacts/?limit=100`;
+  const headers = {
+    Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    const response = await axios.get(url, { headers });
+    const contacts = response.data?.contacts || [];
+
+
+    return res.status(200).json({ contacts });
+
+  } catch (error: any) {
+    console.error('❌ Error fetching GHL contacts:', error.response?.data || error.message);
+    return res.status(500).json({ error: 'Failed to fetch contacts from GoHighLevel' });
+  }
+};
+
+
+
+
+
+export const getGHLContactByPhone = async (req: Request, res: Response): Promise<any> => {
+  const { phone } = req.query;
+
+  if (!phone || typeof phone !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid phone number in query params' });
+  }
+
+  const rawPhone = phone.replace(/[^\d]/g, '');
+  const formattedPhone = `+1${rawPhone}`; // Adjust country code if needed
+
+  console.log("formattedPhone" ,  formattedPhone)
+
+  const searchUrl = `${process.env.GHL_BASE_URL}/contacts/search?phone=${encodeURIComponent(formattedPhone)}`;
+  const headers = {
+    Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    const response = await axios.get(searchUrl, { headers });
+    const contact = response.data?.contacts?.[0];
+
+    if (!contact) {
+      return res.status(404).json({ message: 'No contact found for the provided phone number' });
+    }
+
+    return res.status(200).json({ contact });
+  } catch (error: any) {
+    console.error('❌ Error searching contact by phone:', error.response?.data || error.message);
+    return res.status(500).json({ error: 'Failed to search contact by phone' });
+  }
+};
+
+
+
+
+
+

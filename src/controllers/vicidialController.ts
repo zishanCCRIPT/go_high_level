@@ -240,7 +240,7 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
       return res.status(200).json({
         success: true,
         message: "Lead updated successfully",
-        lead_id: match ? match[1] : null,
+        // lead_id: match ? match[1] : null,
         response: data,
       });
     }
@@ -275,20 +275,13 @@ function formatDateToYYYYMMDD(dateString: string): string | null {
 
 export const handleCallStatus = async (req: Request, res: Response): Promise<any> => {
   const {
-    lead_id,
     phone_number,
-    status,
-    call_date,
-    agent,
-    campaign_id,
-    list_id,
-    user_group,
-    comments,
+   
     disposition,
   } = req.body || {};
 
-  if (!lead_id || !phone_number) {
-    console.error('❌ Missing required fields: lead_id or phone');
+  if ( !phone_number  || !disposition) {
+    
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -305,7 +298,7 @@ export const handleCallStatus = async (req: Request, res: Response): Promise<any
     'Content-Type': 'application/json',
   };
 
-  const rawPhone = phone_number.replace(/[^\d]/g, '');
+  const rawPhone = sanitizePhoneNumber(phone_number);
   const formattedPhone = `+1${rawPhone}`;
 
   try {
@@ -330,7 +323,7 @@ export const handleCallStatus = async (req: Request, res: Response): Promise<any
     const contact = allContacts.find(c => c.phone === formattedPhone);
 
     if (!contact?.id) {
-      console.warn(`❌ Contact with phone ${formattedPhone} not found`);
+
       return res.status(404).json({ error: 'Contact not found in GoHighLevel' });
     }
 

@@ -61,17 +61,16 @@ export const addLead = async (req: Request, res: Response): Promise<any> => {
 
   if (disposition && !allowedDispositions.includes(disposition)) {
     return res.status(400).json({ error: "Invalid disposition value" });
-
   }
 
   // Sanitize and validate phone number
   const sanitizedPhoneNumber = sanitizePhoneNumber(phone_number);
-  if (
-    !sanitizedPhoneNumber ||
-    sanitizedPhoneNumber.length < 6 ||
-    sanitizedPhoneNumber.length > 16
-  ) {
+  if (!sanitizedPhoneNumber) {
     return res.status(400).json({ error: "Invalid phone number format" });
+  }
+
+  if (sanitizedPhoneNumber.length !== 10) {
+    return res.status(400).json({ error: "Phone number must be 10 digits " });
   }
 
   // Prepare URL parameters
@@ -140,7 +139,6 @@ function formatDateOfBirth(dob: string): string | null {
     // Example: Convert "Sep 2nd 1995" to "1995-09-02"
     return new Date(dob).toISOString().split("T")[0];
   } catch (e) {
-
     return null;
   }
 }
@@ -180,20 +178,24 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
       function: "update_lead",
     });
 
-    // Identifier handling
-    if (leadId) {
-      params.append("lead_id", leadId);
-      params.append("search_method", "LEAD_ID");
-    } else if (phone_number) {
-      const sanitizedPhone = phone_number.replace(/\D/g, "");
+    if (phone_number) {
+      const sanitizedPhone = sanitizePhoneNumber(phone_number);
       params.append("phone_number", sanitizedPhone);
       params.append("search_method", "PHONE_NUMBER");
       params.append("search_location", "SYSTEM");
+      if (!sanitizedPhone) {
+        return res.status(400).json({ error: "Invalid phone number format" });
+      }
+
+      if (sanitizedPhone.length !== 10) {
+        return res
+          .status(400)
+          .json({ error: "Phone number must be 10 digits " });
+      }
     }
 
     if (!allowedDispositions.includes(disposition)) {
       return res.status(400).json({ error: "Invalid disposition value" });
-
     }
 
     // Documented optional fields
@@ -269,36 +271,44 @@ function formatDateToYYYYMMDD(dateString: string): string | null {
   }
 }
 
-
-
-
-
-export const handleCallStatus = async (req: Request, res: Response): Promise<any> => {
+export const handleCallStatus = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   const {
     phone_number,
-   
+
     disposition,
   } = req.body || {};
 
-  if ( !phone_number  || !disposition) {
-    
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!phone_number || !disposition) {
+    return res.status(400).json({ error: "Missing required fields" });
   }
 
   if (disposition && !allowedDispositions.includes(disposition)) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid disposition. Lead not processed.',
+      message: "Invalid disposition. Lead not processed.",
       disposition,
     });
   }
 
   const headers = {
     Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   };
 
   const rawPhone = sanitizePhoneNumber(phone_number);
+
+  if (!rawPhone) {
+        return res.status(400).json({ error: "Invalid phone number format" });
+      }
+
+      if (rawPhone.length !== 10) {
+        return res
+          .status(400)
+          .json({ error: "Phone number must be 10 digits " });
+      }
   const formattedPhone = `+1${rawPhone}`;
 
   try {
@@ -320,11 +330,12 @@ export const handleCallStatus = async (req: Request, res: Response): Promise<any
     } while (nextPageToken);
 
     // Step 2: Filter contact by phone number
-    const contact = allContacts.find(c => c.phone === formattedPhone);
+    const contact = allContacts.find((c) => c.phone === formattedPhone);
 
     if (!contact?.id) {
-
-      return res.status(404).json({ error: 'Contact not found in GoHighLevel' });
+      return res
+        .status(404)
+        .json({ error: "Contact not found in GoHighLevel" });
     }
 
     // Step 3: Update contact with new "state"
@@ -333,73 +344,88 @@ export const handleCallStatus = async (req: Request, res: Response): Promise<any
     const updatePayload = {
       customField: [
         {
-          id: contact?.customField[0]?.id || 'I8LvfhNDaFTojQz7YJPA', // Replace with your actual custom field ID
+          id: contact?.customField[0]?.id || "I8LvfhNDaFTojQz7YJPA", // Replace with your actual custom field ID
           value: disposition,
         },
       ],
     };
 
-
     try {
-      const updateResponse = await axios.put(updateUrl, updatePayload, { headers });
-      console.log('✅ Disposition (state) updated in GoHighLevel:', updateResponse.data);
+      const updateResponse = await axios.put(updateUrl, updatePayload, {
+        headers,
+      });
+      console.log(
+        "✅ Disposition (state) updated in GoHighLevel:",
+        updateResponse.data
+      );
     } catch (updateError: any) {
-      console.error('❌ Error during contact update:', updateError.response?.data || updateError.message);
-      return res.status(500).json({ error: 'Failed to update disposition in GoHighLevel' });
+      console.error(
+        "❌ Error during contact update:",
+        updateError.response?.data || updateError.message
+      );
+      return res
+        .status(500)
+        .json({ error: "Failed to update disposition in GoHighLevel" });
     }
 
-    return res.status(200).json({ message: 'Call status and disposition updated successfully' });
-
+    return res
+      .status(200)
+      .json({ message: "Call status and disposition updated successfully" });
   } catch (error: any) {
-    console.error('❌ Unexpected server error:', error.message);
-    return res.status(500).json({ error: 'Unexpected server error' });
+    console.error("❌ Unexpected server error:", error.message);
+    return res.status(500).json({ error: "Unexpected server error" });
   }
 };
 
-
-
-
-
-export const getAllGHLContacts = async (req: Request, res: Response): Promise<any> => {
+export const getAllGHLContacts = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   const url = `${process.env.GHL_BASE_URL}/contacts/?limit=100`;
   const headers = {
     Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   };
 
   try {
     const response = await axios.get(url, { headers });
     const contacts = response.data?.contacts || [];
 
-
     return res.status(200).json({ contacts });
-
   } catch (error: any) {
-    console.error('❌ Error fetching GHL contacts:', error.response?.data || error.message);
-    return res.status(500).json({ error: 'Failed to fetch contacts from GoHighLevel' });
+    console.error(
+      "❌ Error fetching GHL contacts:",
+      error.response?.data || error.message
+    );
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch contacts from GoHighLevel" });
   }
 };
 
-
-
-
-
-export const getGHLContactByPhone = async (req: Request, res: Response): Promise<any> => {
+export const getGHLContactByPhone = async (
+  req: Request,
+  res: Response
+): Promise<any> => {
   const { phone } = req.query;
 
-  if (!phone || typeof phone !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid phone number in query params' });
+  if (!phone || typeof phone !== "string") {
+    return res
+      .status(400)
+      .json({ error: "Missing or invalid phone number in query params" });
   }
 
-  const rawPhone = phone.replace(/[^\d]/g, '');
+  const rawPhone = phone.replace(/[^\d]/g, "");
   const formattedPhone = `+1${rawPhone}`; // Adjust country code if needed
 
-  console.log("formattedPhone", formattedPhone)
+  console.log("formattedPhone", formattedPhone);
 
-  const searchUrl = `${process.env.GHL_BASE_URL}/contacts/search?phone=${encodeURIComponent(formattedPhone)}`;
+  const searchUrl = `${
+    process.env.GHL_BASE_URL
+  }/contacts/search?phone=${encodeURIComponent(formattedPhone)}`;
   const headers = {
     Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   };
 
   try {
@@ -407,18 +433,17 @@ export const getGHLContactByPhone = async (req: Request, res: Response): Promise
     const contact = response.data?.contacts?.[0];
 
     if (!contact) {
-      return res.status(404).json({ message: 'No contact found for the provided phone number' });
+      return res
+        .status(404)
+        .json({ message: "No contact found for the provided phone number" });
     }
 
     return res.status(200).json({ contact });
   } catch (error: any) {
-    console.error('❌ Error searching contact by phone:', error.response?.data || error.message);
-    return res.status(500).json({ error: 'Failed to search contact by phone' });
+    console.error(
+      "❌ Error searching contact by phone:",
+      error.response?.data || error.message
+    );
+    return res.status(500).json({ error: "Failed to search contact by phone" });
   }
 };
-
-
-
-
-
-

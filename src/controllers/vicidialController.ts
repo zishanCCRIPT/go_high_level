@@ -17,9 +17,14 @@ const sanitizePhoneNumber = (phone_number: string): string => {
   // Remove all non-digit characters
   const digitsOnly = phone_number.replace(/\D/g, "");
 
-  // If it starts with +, you may want to keep the country code
+  // If it starts with country code '1' (US/Canada), remove it
+  if (digitsOnly.startsWith("1") && phone_number.trim().startsWith("+1")) {
+    return digitsOnly.slice(1);
+  }
+
   return digitsOnly;
 };
+
 
 function validateEnvVars(res: Response): boolean {
   if (!API_USERNAME || !API_PASSWORD || !BASE_URL) {
@@ -27,6 +32,28 @@ function validateEnvVars(res: Response): boolean {
     return false;
   }
   return true;
+}
+
+// Helper function to format date of birth
+function formatDateOfBirth(dob: string): string | null {
+  try {
+    // Implement your date parsing logic here
+    // Example: Convert "Sep 2nd 1995" to "1995-09-02"
+    return new Date(dob).toISOString().split("T")[0];
+  } catch (e) {
+    return null;
+  }
+}
+// Helper function (same as in addLead)
+function formatDateToYYYYMMDD(dateString: string): string | null {
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString().split("T")[0];
+  } catch (e) {
+    console.warn("Date format error:", e);
+    return null;
+  }
 }
 
 export const addLead = async (req: Request, res: Response): Promise<any> => {
@@ -70,7 +97,7 @@ export const addLead = async (req: Request, res: Response): Promise<any> => {
   }
 
   if (sanitizedPhoneNumber.length !== 10) {
-    return res.status(400).json({ error: "Phone number must be 10 digits " });
+    return res.status(400).json({ error: "Invalid phone number " });
   }
 
   // Prepare URL parameters
@@ -132,17 +159,6 @@ export const addLead = async (req: Request, res: Response): Promise<any> => {
   }
 };
 
-// Helper function to format date of birth
-function formatDateOfBirth(dob: string): string | null {
-  try {
-    // Implement your date parsing logic here
-    // Example: Convert "Sep 2nd 1995" to "1995-09-02"
-    return new Date(dob).toISOString().split("T")[0];
-  } catch (e) {
-    return null;
-  }
-}
-
 export const updateLead = async (req: Request, res: Response): Promise<any> => {
   const {
     leadId,
@@ -190,7 +206,7 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
       if (sanitizedPhone.length !== 10) {
         return res
           .status(400)
-          .json({ error: "Phone number must be 10 digits " });
+          .json({ error: "Invalid phone number " });
       }
     }
 
@@ -259,27 +275,21 @@ export const updateLead = async (req: Request, res: Response): Promise<any> => {
   }
 };
 
-// Helper function (same as in addLead)
-function formatDateToYYYYMMDD(dateString: string): string | null {
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return null;
-    return date.toISOString().split("T")[0];
-  } catch (e) {
-    console.warn("Date format error:", e);
-    return null;
-  }
-}
-
 export const handleCallStatus = async (
   req: Request,
   res: Response
 ): Promise<any> => {
+
+
   const {
     phone_number,
 
     disposition,
   } = req.body || {};
+
+      console.log("raw" , phone_number,
+
+    disposition )
 
   if (!phone_number || !disposition) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -300,15 +310,15 @@ export const handleCallStatus = async (
 
   const rawPhone = sanitizePhoneNumber(phone_number);
 
-  if (!rawPhone) {
-        return res.status(400).json({ error: "Invalid phone number format" });
-      }
 
-      if (rawPhone.length !== 10) {
-        return res
-          .status(400)
-          .json({ error: "Phone number must be 10 digits " });
-      }
+
+  if (!rawPhone) {
+    return res.status(400).json({ error: "Invalid phone number format" });
+  }
+
+  if (rawPhone.length !== 10) {
+    return res.status(400).json({ error: "Invalid phone number" });
+  }
   const formattedPhone = `+1${rawPhone}`;
 
   try {
